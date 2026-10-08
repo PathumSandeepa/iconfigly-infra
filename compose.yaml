@@ -1,0 +1,68 @@
+name: iconfigly
+
+services:
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: iconfigly-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: golang:1.27-bookworm
+    container_name: iconfigly-api
+    working_dir: /app
+    volumes:
+      - ../iconfigly-api:/app
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      ["go", "run", "./cmd/server"]
+
+  web:
+    image: node:26-bookworm-slim
+    container_name: iconfigly-web
+    working_dir: /app
+    volumes:
+      - ../iconfigly-web:/app
+      - web_node_modules:/app/node_modules
+      - web_next:/app/.next
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+      API_URL: http://api:8080
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+    command:
+      ["sh", "-c", "npm install && npm run dev"]
+
+volumes:
+  postgres_data:
+  go_mod_cache:
+  go_build_cache:
+  web_node_modules:
+  web_next:
