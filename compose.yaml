@@ -59,7 +59,21 @@ services:
       - api
     command:
       ["sh", "-c", "npm install && npm run dev"]
-
+      
+  migrate:
+    image: migrate/migrate:latest
+    container_name: iconfigly-migrate
+    profiles:
+      - tools
+    volumes:
+      - ../iconfigly-api/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
   postgres_data:
   go_mod_cache:
