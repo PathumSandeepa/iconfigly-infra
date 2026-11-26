@@ -33,11 +33,18 @@ services:
       - go_build_cache:/root/.cache/go-build
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      ICONFIGLY_VERSION: ${ICONFIGLY_VERSION:-1.0.0}
+      ICONFIGLY_SMTP_HOST: ${ICONFIGLY_SMTP_HOST:-mailpit}
+      ICONFIGLY_SMTP_PORT: ${ICONFIGLY_SMTP_PORT:-1025}
+      ICONFIGLY_SMTP_FROM: ${ICONFIGLY_SMTP_FROM:-noreply@iconfigly.local}
+      ICONFIGLY_RUN_EMBEDDED_WORKER: ${ICONFIGLY_RUN_EMBEDDED_WORKER:-true}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     command:
       ["go", "run", "./cmd/server"]
 
@@ -53,13 +60,40 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       WATCHPACK_POLLING: "true"
       API_URL: http://api:8080
+      NEXT_PUBLIC_APP_VERSION: ${ICONFIGLY_VERSION:-1.0.0}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
       - api
     command:
       ["sh", "-c", "npm install && npm run dev"]
+
+  docs:
+    image: node:26-bookworm-slim
+    container_name: iconfigly-docs
+    working_dir: /app
+    volumes:
+      - ../iconfigly-docs:/app
+      - docs_node_modules:/app/node_modules
+      - docs_next:/app/.next
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+      PORT: "3001"
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_VERSION: ${ICONFIGLY_VERSION:-1.0.0}
+    ports:
+      - "127.0.0.1:3001:3001"
+    command:
+      ["sh", "-c", "npm install && npm run dev"]
       
+  mailpit:
+    image: axllent/mailpit:v1.22
+    container_name: iconfigly-mailpit
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
   migrate:
     image: migrate/migrate:latest
     container_name: iconfigly-migrate
@@ -80,3 +114,5 @@ volumes:
   go_build_cache:
   web_node_modules:
   web_next:
+  docs_node_modules:
+  docs_next:
